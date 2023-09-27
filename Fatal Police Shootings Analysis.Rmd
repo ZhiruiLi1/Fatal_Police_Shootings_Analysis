@@ -1,0 +1,539 @@
+---
+title: "DATA2020PROJECT"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(ggfortify)
+library(GGally) # For ggcor()
+library(Hmisc)
+library(naniar) # For vis_miss() function to visualize missing data
+library(repr) # For adjusting plot sizes
+library(glmnet) # For ridge and LASSO
+library(lme4) # For multi-level modeling
+library(psych)
+library(optimx)
+library(InformationValue)
+library(lmtest)
+library(scales)
+```
+
+
+
+```{r}
+fatal <- read_csv("~/Desktop/fatal-police-shootings-data.csv")
+```
+
+
+
+```{r}
+fatal <- fatal %>%
+  select(-c(id, name, date, longitude, latitude, city))
+```
+
+
+```{r}
+vis_miss(fatal)
+```
+
+```{r}
+fatal = na.omit(fatal)
+```
+
+
+```{r}
+hist(fatal$age, main = "Histogram of Age", xlab = 'age', ylab = 'count', col = "lightblue")
+```
+
+
+
+```{r}
+count_race = as.data.frame(table(fatal$race))
+colnames(count_race)[colnames(count_race) == "Var1"] <- "race"
+colnames(count_race)[colnames(count_race) == "Freq"] <- "count"
+race_percentage = numeric(6)
+for (i in 1:6){
+  race_percentage[i] = count_race$count[i]/sum(count_race$count)
+}
+count_race['race_percentage'] <- race_percentage
+count_race
+```
+
+
+```{r}
+ggplot(data = count_race, aes(x = reorder(race, -count), 
+                              y = count, 
+                              label = scales::percent(race_percentage),
+                              fill = race)) +
+  geom_bar(stat = 'identity') +
+  geom_text(vjust = -0.3,
+            size = 3) +
+  ggtitle('Racial Distribution in Fatal Police Shootings') +
+  labs(x = 'race', y = 'count')
+```
+
+
+```{r}
+count_mental = as.data.frame(table(fatal$signs_of_mental_illness))
+colnames(count_mental)[colnames(count_mental) == "Var1"] <- "mental"
+colnames(count_mental)[colnames(count_mental) == "Freq"] <- "count"
+mental_percentage = numeric(2)
+for (i in 1:2){
+  mental_percentage[i] = count_mental$count[i]/sum(count_mental$count)
+}
+count_mental['mental_percentage'] <- mental_percentage
+count_mental
+```
+
+```{r}
+ggplot(data = count_mental, aes(x = reorder(mental, -count), 
+                                y = count, 
+                                label = scales::percent(mental_percentage),
+                                fill = mental)) +
+  geom_bar(stat = 'identity') +
+  geom_text(vjust = -0.3,
+            size = 3) +
+  ggtitle('Percentage of the Victims have the Mental Illness') +
+  labs(x = 'mental illness', y = 'count')
+```
+
+
+
+```{r}
+count_state = as.data.frame(table(fatal$state))
+colnames(count_state)[colnames(count_state) == "Var1"] <- "state"
+colnames(count_state)[colnames(count_state) == "Freq"] <- "count"
+count_state =count_state[order(-count_state$count),] # order by descending
+                                                     # order() returns indices
+count_state_10 = count_state[1:10,]
+state_percentage = numeric(10)
+for (i in 1:10){
+  state_percentage[i] = count_state$count[i]/sum(count_state$count)
+}
+count_state_10['state_percentage'] <- state_percentage
+sum(count_state_10$state_percentage)
+```
+
+
+
+```{r}
+ggplot(data = count_state_10, aes(x = reorder(state, -count), 
+                                  y = count, 
+                                  label = scales::percent(state_percentage),
+                                  fill = state)) +
+  geom_bar(stat = 'identity') +
+  ggtitle('Top 10 States with the Highest Fatal Police Shootings Cases') +
+  geom_text(vjust = -0.3,
+            size = 3) +
+  labs(x = 'state', y = 'count')
+```
+
+
+```{r}
+count_gender = as.data.frame(table(fatal$gender))
+colnames(count_gender)[colnames(count_gender) == "Var1"] <- "gender"
+colnames(count_gender)[colnames(count_gender) == "Freq"] <- "count"
+count_gender =count_gender[order(-count_gender$count),] 
+count_gender_2 = count_gender[1:2,]
+gender_percentage = numeric(2)
+for (i in 1:2){
+  gender_percentage[i] = count_gender$count[i]/sum(count_gender$count)
+}
+count_gender_2['gender_percentage'] <- gender_percentage
+```
+
+```{r}
+ggplot(data = count_gender_2, aes(x = reorder(gender, -count), 
+                                  y = count, 
+                                  label = scales::percent(gender_percentage),
+                                  fill = gender)) +
+  geom_bar(stat = 'identity') +
+  ggtitle('Gender Distribution of Fatal Police Shootings') +
+  geom_text(vjust = -0.3,
+            size = 3) +
+  labs(x = 'gender', y = 'count')
+```
+
+
+
+```{r}
+count_armed = as.data.frame(table(fatal$armed))
+colnames(count_armed)[colnames(count_armed) == "Var1"] <- "armed"
+colnames(count_armed)[colnames(count_armed) == "Freq"] <- "count"
+count_armed =count_armed[order(-count_armed$count),] 
+count_armed_10 = count_armed[1:10,]
+armed_percentage = numeric(10)
+for (i in 1:10){
+  armed_percentage[i] = count_armed$count[i]/sum(count_armed$count)
+}
+count_armed_10['armed_percentage'] <- armed_percentage
+```
+
+
+
+```{r}
+ggplot(data = count_armed_10, aes(x = reorder(armed, -count), 
+                                  y = count, 
+                                  label = scales::percent(armed_percentage),
+                                  fill = armed)) +
+  geom_bar(stat = 'identity') +
+  ggtitle('Equipped Weapon TOP 10 of the Victims') +
+  geom_text(vjust = -0.4,
+            size = 2) +
+  labs(x = 'armed type', y = 'count') + 
+  theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.1))
+```
+
+
+
+
+```{r}
+fatal <- fatal %>%
+  mutate(race = ifelse(race == 'B', 1, 0))
+```
+
+If race is black, encoded as 1. Otherwise, encoded as 0. 
+
+
+
+```{r}
+fatal <- fatal %>% 
+    mutate(across(.cols=c(manner_of_death, armed, race, gender, state, signs_of_mental_illness, threat_level, flee, body_camera, is_geocoding_exact), .fns = as.factor))
+```
+
+
+```{r}
+fatal <- fatal %>%
+    mutate(across(.cols=c(age), .fns = ~ (.x-mean(.x))/sd(.x)))
+summary(fatal)
+# help to converge 
+```
+
+We only have one continuous variable which is age. 
+
+
+```{r}
+head(fatal)
+```
+
+
+
+```{r}
+length(unique(fatal$state))
+```
+
+We have 51 groups. 
+
+
+
+```{r}
+# Split into test and train sets
+set.seed(1)
+samp.size = floor(0.8*nrow(fatal))
+train.ind = sample(nrow(fatal), size = samp.size)
+fatal.train = fatal[train.ind,]
+fatal.test = fatal[-train.ind,]
+dim(fatal.train)
+dim(fatal.test)
+```
+
+
+
+
+```{r}
+model1 = glmer(race ~ manner_of_death + armed + gender + signs_of_mental_illness + threat_level + flee + body_camera + is_geocoding_exact + age + (1|state), data = fatal, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+
+```{r}
+summary(model1)
+```
+
+
+
+```{r}
+model2 = glmer(race ~ gender + signs_of_mental_illness  + flee + body_camera + age + (1|state), data = fatal, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+```{r}
+summary(model2)
+```
+
+
+
+```{r}
+lrtest(model1, model2)
+```
+
+Since the p-value is not significant on 5% significance level, we fail to reject the null and stick with the reduced model model 2. 
+
+
+
+```{r}
+model3 = glmer(race ~ gender + signs_of_mental_illness + flee + body_camera + age + (1|state) + gender:flee, data = fatal, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+
+```{r}
+summary(model3)
+```
+
+
+```{r}
+lrtest(model2, model3)
+```
+
+Since the p-value is significant on 5% significance level, we reject the null and stick with the full model. 
+
+
+
+```{r}
+random_effects = as.data.frame(ranef(model3))
+random_effects = random_effects[order(-random_effects$condval),]
+random_intercept_top10 = random_effects[1:10,]
+random_intercept_top10
+```
+
+```{r}
+random_intercept_bottom10 = random_effects[order(random_effects$condval),][1:10,]
+random_intercept_bottom10
+```
+
+
+```{r}
+DC_odds = exp(2.5972)
+MD_odds = exp(1.856567)
+NM_odds = exp(-2.116190)
+DC_odds
+MD_odds
+NM_odds
+```
+
+```{r}
+probability_DC = DC_odds/(1+DC_odds)
+probability_MD = MD_odds/(1+MD_odds)
+probability_NM = NM_odds/(1+NM_odds)
+probability_DC
+probability_MD
+probability_NM
+```
+
+
+```{r}
+comparison = 13.42609/0.1204898
+comparison
+```
+
+
+If a victim is in Washington, D.C., the odds of the probability being black controlling all the other predictors is the highest and it is 13.42609, which is almost double the odds of the state Maryland (second highest) controlling all the other predictors. Moreover, when we compared the state with the highest random intercept(Washington, D.C.) and the state with the lowest random intercept(New Mexico), DC has almost 111 times higher odds for the victim being classified as black controlling all the other predictors. 
+
+
+```{r}
+prob <- predict(model3, newdata = fatal.test, type = "response", allow.new.levels = TRUE)
+pred <- ifelse(prob > 0.5, 1, 0)
+actual = fatal.test$race
+table(pred, actual)
+```
+
+
+```{r}
+precision = 87/(87 + 44)
+recall = 87/(87 + 206)
+precision
+recall
+```
+
+The precision of our model is 66.4% and the recall of our model is 29.7%.
+
+
+```{r}
+sum(pred == fatal.test$race)/nrow(fatal.test)
+```
+
+Accuracy for the model 2 is 76.3%.
+
+
+```{r}
+plotROC(fatal.test$race, prob, Show.labels=F)
+```
+
+
+
+```{r}
+group_size = ceiling(length(prob)/10)
+ordering = order(prob) # order(prob) returns indices, not the actual probability
+average_prob = numeric(10)
+percent_1 = numeric(10)
+for (i in 1:10){
+  start = (i-1)*group_size + 1
+  end = min(length(prob), start + group_size)
+  average_prob[i] = mean(prob[ordering[start:end]])
+  percent_1[i] = mean(fatal.test$race[ordering[start:end]] == 1)
+}
+
+ggplot()+
+  geom_point(aes(x = average_prob, y = percent_1))+
+  geom_abline(aes(slope = 1,intercept = 0), col="red") +
+  ggtitle('Calibration Plot for Model 3')
+```
+
+From the calibration plot, we can see that the estimated distribution matches the actual distribution on the test data set. 
+
+
+
+# Forward Stepwise Selection without Random Effects
+
+```{r}
+model.null = glm(race~1, data = fatal.train, family = 'binomial')  
+model.full = glm(race~., data = fatal.train, family = 'binomial')  
+model.forward = step(model.null, scope=list(lower = model.null,upper = model.full), direction="forward")
+```
+
+
+```{r}
+summary(model.forward)
+```
+
+
+```{r}
+forward_coefficients = as.data.frame(coef(model.forward))
+colnames(forward_coefficients)[1] = "coefficient"
+forward_coefficients['state'] <- rownames(forward_coefficients)
+forward_coefficients = forward_coefficients[order(-forward_coefficients$coefficient),]
+forward_coefficients_top10 = forward_coefficients[1:10,]
+forward_coefficients_top10
+```
+
+```{r}
+forward_coefficients = forward_coefficients[order(forward_coefficients$coefficient),]
+forward_coefficients_bottom10 = forward_coefficients[1:10,]
+forward_coefficients_bottom10
+```
+
+
+We can see that for the forward stepwise selection model, state DC, MD, and LA also have the highest coefficients, which mean that these states have the highest odds/log odds when controlling all the other predictors to 0. 
+
+
+```{r}
+forward_DC = exp(-3.31434 + 5.240528)
+forward_MD = exp(-3.31434 + 3.190929)
+forward_ND = exp(-3.31434 - 14.3366207)
+forward_DC
+forward_MD
+forward_ND
+```
+
+
+```{r}
+comparison_forward = 6.863297/2.159162e-08
+comparison_forward
+```
+
+
+```{r}
+probability_DC_forward = forward_DC/(1+forward_DC)
+probability_MD_forward = forward_MD/(1+forward_MD)
+probability_ND_forward = forward_ND/(1+forward_ND)
+probability_DC_forward
+probability_MD_forward
+probability_ND_forward
+```
+
+
+
+```{r}
+prob_forward <- predict(model.forward, newdata = fatal.test, type = "response")
+pred_forward <- ifelse(prob_forward > 0.5, 1, 0)
+actual = fatal.test$race
+table(pred_forward, actual)
+```
+
+
+```{r}
+precision_forward = 88/(88 + 52)
+recall_forward = 88/(88 + 205)
+precision_forward
+recall_forward
+```
+
+
+```{r}
+sum(pred_forward == fatal.test$race)/nrow(fatal.test)
+```
+
+
+```{r}
+plotROC(fatal.test$race, prob_forward, Show.labels=F)
+```
+
+The accuracy and AUROC for the foward stepwise selection model is worse than the mixed effect model. 
+
+
+```{r}
+group_size_forward = ceiling(length(prob_forward)/10)
+ordering_forward = order(prob_forward) 
+# order(prob_forward) returns indices, not the actual probability
+average_prob_forward = numeric(10)
+percent_1_forward = numeric(10)
+for (i in 1:10){
+  start = (i-1)*group_size_forward + 1
+  end = min(length(prob_forward), start + group_size_forward)
+  average_prob_forward[i] = mean(prob_forward[ordering_forward[start:end]])
+  percent_1_forward[i] = mean(fatal.test$race[ordering_forward[start:end]] == 1)
+}
+
+ggplot()+
+  geom_point(aes(x = average_prob_forward, y = percent_1_forward))+
+  geom_abline(aes(slope = 1,intercept = 0), col="red") +
+  ggtitle('Calibration Plot for the Forward Stepwise Selection Model')
+```
+
+The calibration plot for the forward stepwise selection model is not bad. 
+
+
+
+```{r}
+precision = c(0.6641221, 0.6285714)
+recall = c(0.2969283, 0.3003413)
+accuracy = c(0.7630332, 0.7563981)
+AUROC = c(0.7573, 0.7457)
+df = data.frame(percent(precision), percent(recall), percent(accuracy), percent(AUROC))
+rownames(df)[1] = "mixed effects model"
+rownames(df)[2] = "model using FSS"
+colnames(df)[1] = "precision"
+colnames(df)[2] = "recall"
+colnames(df)[3] = "accuracy"
+colnames(df)[4] = "AUROC"
+df
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

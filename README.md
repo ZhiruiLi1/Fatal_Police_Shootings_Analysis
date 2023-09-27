@@ -1,0 +1,1 @@
+This graduate-level statistical learning capstone project rigorously examines racial disparities in fatal police shootings, utilizing advanced mixed-effect and forward stepwise logistic regression models.
